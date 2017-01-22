@@ -1,5 +1,8 @@
 package ICPE;
 import java.awt.geom.Point2D;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Vector;
@@ -8,6 +11,7 @@ import Geography.GeoCode;
 import Geography.GeoCodeStatus;
 import Geography.Lambert93;
 import InputOutput.CSVReader;
+import InputOutput.MyFileWriter;
 
 
 public class Site {
@@ -87,20 +91,64 @@ public class Site {
     private String DatePAC;//110
     private boolean MaitriseUrbanismePIGSUP;//111
     private boolean NI140;//93
-    @SuppressWarnings("unused")
 	private HashSet<Installation> TableauClassement;
-    @SuppressWarnings("unused")
 	private HashMap<String,Double> GEREPAir;
     
     public Site(){}
     
-    public Site(String CSVLine){
+    public Site(String CSVLine, String TableauClassementFileAddress, String GEREPAirFileAddress){
     	Vector<String> VectorLine = CSVReader.ParseCSVLine(CSVLine);
-    	
+    	this.S3ICNum=VectorLine.get(0); //0
+    	String S3ICNumInitial = S3ICNum.substring(0, S3ICNum.indexOf("."));
+    	String S3ICNumFinal = S3ICNum.substring(S3ICNum.indexOf(".")+1,S3ICNum.length());
+    	int S3ICNumInitialInt= Integer.parseInt(S3ICNumInitial);
+    	this.S3ICNum = S3ICNumInitialInt+"."+S3ICNumFinal;
+    	BufferedReader rdr ;
     	this.TableauClassement = new HashSet<Installation>();
+		try
+		{
+			rdr = new BufferedReader(new FileReader(TableauClassementFileAddress)) ;
+			Installation Current = new Installation();
+			while (rdr.ready()==true) 
+			{
+				Current = new Installation(rdr.readLine());
+				if(Current.getS3ICNum().equals(this.S3ICNum)){TableauClassement.add(Current);}
+			}//while
+		}//try
+		catch (NullPointerException a)
+		{
+			a.printStackTrace();
+		}
+		catch (IOException a) 
+		{
+			System.out.println("Problème d'IO");
+		}
     	this.GEREPAir = new HashMap<String,Double>();
     	
-    	this.S3ICNum=VectorLine.get(0); //0
+    	try
+		{
+			rdr = new BufferedReader(new FileReader(GEREPAirFileAddress)) ;
+			Vector<String> CurrentLine = new Vector<String>();
+			String str ="";
+			while (rdr.ready()==true) 
+			{
+				str = rdr.readLine();
+				//System.out.println(str);
+				CurrentLine = CSVReader.ParseCSVLine(str);
+				if(CurrentLine.get(1).equals(this.S3ICNum))
+				{
+					GEREPAir.put(CurrentLine.get(9), Double.parseDouble(CurrentLine.get(13)));
+				}
+			}//while
+		}//try
+		catch (NullPointerException a)
+		{
+			a.printStackTrace();
+		}
+		catch (IOException a) 
+		{
+			System.out.println("Problème d'IO");
+		}
     	this.NomUsuel=VectorLine.get(1); //1
     	this.RaisonSociale=VectorLine.get(2); //2
     	String Regime = VectorLine.get(4);
@@ -111,10 +159,10 @@ public class Site {
     			{
     				if(SevesoStatus.equals("NS - Non Seveso"))
     				{this.RegimeEtablissement=ICPERegime.AUTORISATION;}
-    				else if (SevesoStatus.equals("SSB - Seuil Bas (Seveso III)"))
+    				else if (SevesoStatus.contains("SB - Seuil Bas"))
     				{this.RegimeEtablissement=ICPERegime.SEVESOBAS;}
-    				else if (SevesoStatus.equals("SSH - Seuil Haut (Seveso III)"))
-    				{this.RegimeEtablissement=ICPERegime.SEVESOBAS;}
+    				else if (SevesoStatus.contains("SH - Seuil Haut"))
+    				{this.RegimeEtablissement=ICPERegime.SEVESOHAUT;}
     			}//4 et 5
     	this.Commune = VectorLine.get(6); //6
     	this.CodeINSEE = VectorLine.get(7); //7
@@ -126,6 +174,8 @@ public class Site {
     	this.ServiceControle= VectorLine.get(14); //14
     	this.AdresseAdministrative = VectorLine.get(15)+", "+VectorLine.get(16)+", "+VectorLine.get(17)+", "+VectorLine.get(18)+", "+VectorLine.get(19); //Adresse pour la facturation TGAP, etc. 15 16 17 18 19
     	this.SIRET=VectorLine.get(31);//31 
+    	try
+    	{
     	int Lambert93X = Integer.parseInt(VectorLine.get(33)) ;
     	int Lambert93Y = Integer.parseInt(VectorLine.get(34)) ;
     	Point2D.Double myLatLon = new Point2D.Double(0,0);
@@ -156,7 +206,22 @@ public class Site {
     			this.Longitude = myGeoCode.getNumLongitude();
     		}
     	}
-
+    	}
+    	catch(Exception NumberFormatException)
+    	{
+        	Point2D.Double myLatLon = new Point2D.Double(0,0);
+        	GeoCode myGeoCode = new GeoCode(this.CodePostal+", "+this.Commune+", FRANCE");
+    		if(!myGeoCode.getStatus().equals(GeoCodeStatus.GEOCODE_OK))
+    		{
+            	this.Latitude=myLatLon.y;
+            	this.Longitude=myLatLon.x;
+    		}
+    		else
+    		{
+    			this.Latitude = myGeoCode.getNumLatitude();
+    			this.Longitude = myGeoCode.getNumLongitude();
+    		}
+    	}
     	this.NAFCode=VectorLine.get(36);//36
     	this.SoumisRemiseEtat=ReadBoolean(VectorLine.get(38));//38
     	this.EstPrioritaire=ReadBoolean(VectorLine.get(39));//39
@@ -295,7 +360,7 @@ public class Site {
     public boolean getNI140(){ return NI140;}
     
     
-    private boolean ReadBoolean(String readString)
+    private static boolean ReadBoolean(String readString)
     {
     	if(readString.equals("Oui"))
     	{
@@ -307,6 +372,105 @@ public class Site {
     	}
     		
     }
+    
+    
+    public String toHTML()
+    {
+    	String result = "";
+    	result = result+"<b>"+MyFileWriter.escape(this.RaisonSociale)+"</b><br><br>";
+
+    	result = result+"<b>NAFCode      </b> : "+this.NAFCode+"<br>";
+    	result = result+"<b>N&deg; S3IC      </b> : "+this.S3ICNum+"<br>";
+    	result = result+"<b>Régime       </b> : "+this.RegimeEtablissement.toString()+"<br><hr><br>";
+    	result = result+"<b>Commune      </b> : "+MyFileWriter.escape(this.Commune)+"<br>";
+    	result = result+"<b>CodeINSEE    </b> : "+this.CodeINSEE+"<br>";
+    	result = result+"<b>CodePostal   </b> : "+this.CodePostal+"<br>";
+    	result = result+"<b>"+MyFileWriter.escape("Département")+"  </b> : "+this.Departement+"<br>";
+    	result = result+"<b>Telephone    </b> : "+this.Telephone+"<br>";
+    	result = result+"<b>Fax          </b> : "+this.Fax+"<br>";
+    	result = result+"<b>Adresse      </b> : "+MyFileWriter.escape(this.Adresse)+"<br>";
+    	result = result+"<b>SIRET        </b> : "+this.SIRET+"<br>";
+    	result = result+"<b>Latitude     </b> : "+this.Latitude+"<br>";
+    	result = result+"<b>Longitude    </b> : "+this.Longitude+"<br><hr><br>";
+    	
+    	result = result+"<b>Tableau de Classement</b><br><br>";
+    	result = result+"<table style=\"width:100%\"><tr><th>Rubrique</th><th>"+MyFileWriter.escape("Alinéa")+"</th><th>"+MyFileWriter.escape("Régime")+"</th><th>Date Dern. Mod. Notable</th><th>"+MyFileWriter.escape("État technique")+"</th></tr>";
+    	for(Installation i : this.TableauClassement)
+    	{
+    		result = result+"<tr><td>"+i.RubriqueVigueurCorresp+"</td><td>"+i.RVCAlinea+"</td><td>"+i.RVCRegime.toString()+"</td><td>"+i.DateDerniereModificationNotable+"</td><td>"+MyFileWriter.escape(i.EtatTechnique)+"</td><tr>";
+    	}
+    	result = result+"</table><br><hr><br>";
+    	
+    	result = result+"<b>"+MyFileWriter.escape("Déclaration")+" GEREP</b><br><br>";
+    	result = result+"<table style=\"width:100%\"><tr><th>"+MyFileWriter.escape("Paramètre")+"</th><th>Rejets AN-1 (kg)</th></tr>";
+    	for(String i : this.GEREPAir.keySet())
+    	{
+    		result = result+"<tr><td>"+MyFileWriter.escape(i)+"</td><td>"+this.GEREPAir.get(i)+"</td><tr>";
+    	}
+    	result = result+"</table><br><hr><br>";
+    	result = result+"<b> Autres Critères</b><br><br>";		
+
+	result = result + "SoumisRemiseEtat : "+SoumisRemiseEtat+"<br>";//38
+	result = result + "EstPrioritaire : "+EstPrioritaire+"<br>";//39
+	result = result + "EstAEnjeux : "+EstAEnjeux+"<br>";//40
+	result = result + "CritereEau : "+CritereEau+"<br>";//41
+	result = result + "CritereAir : "+CritereAir+"<br>";//42
+	result = result + "CritereDechets : "+CritereDechets+"<br>";//43
+	result = result + "CritereSSP : "+CritereSSP+"<br>";//44
+	result = result + "CritereRisques : "+CritereRisques+"<br>";//45
+	result = result + "SoumisQuotas : "+SoumisQuotas+"<br>";//46
+	result = result + "SoumisGIC : "+SoumisGIC+"<br>";//47
+	result = result + "SoumisIEDGIC : "+SoumisIEDGIC+"<br>";//48
+	result = result + "EstIncinerateur : "+EstIncinerateur+"<br>";//50
+	result = result + "SoumisReductionCOV : "+SoumisReductionCOV+"<br>";//51
+	result = result + "STEPIndustrielle : "+STEPIndustrielle+"<br>";//52
+	result = result + "SoumisIPPC : "+SoumisIPPC+"<br>";//53
+	result = result + "IED : "+IED+"<br>";//54 attention il faut caster IED-MTD ou nonIED-MTD en boolean
+	result = result + "RejetsAqueux : "+RejetsAqueux+"<br>";//55
+	result = result + "RejetsAtmospheriques : "+RejetsAtmospheriques+"<br>";//56
+	result = result + "DeclarationDechets : "+DeclarationDechets+"<br>";//57
+	result = result + "AutosurveillanceEauxSouterraines : "+AutosurveillanceEauxSouterraines+"<br>";//58
+	result = result + "SurveillanceMilieux : "+SurveillanceMilieux+"<br>";//59
+	result = result + "DeclarationEmissions : "+DeclarationEmissions+"<br>";//61
+	result = result + "SoumisRSDE2002 : "+SoumisRSDE2002+"<br>";//62
+	result = result + "SoumisRSDE2009 : "+SoumisRSDE2009+"<br>";//63
+	result = result + "Amiante : "+Amiante+"<br>"; //sites ayant utilisé de l'amiante.64
+	result = result + "DepotPneumatiques : "+DepotPneumatiques+"<br>";//65
+	result = result + "ImpactPlomb : "+ImpactPlomb+"<br>";//66
+	result = result + "ConsommateurCOV : "+ConsommateurCOV+"<br>"; //sites consommant plus de 30 tonnes de COV.67
+	result = result + "SoumisGEREP : "+SoumisGEREP+"<br>";//68
+	result = result + "SoumisRSDE2004 : "+SoumisRSDE2004+"<br>"; //69 soumis réduction réelle substances dangereuses eau après 2004.
+	result = result + "SoumisREISTA : "+SoumisREISTA+"<br>";//70
+	result = result + "PlanModernisation : "+PlanModernisation+"<br>"; //71 AM du 4 oct 2010.
+    result = result + "OuvrageRetenue : "+OuvrageRetenue+"<br>";//72
+    result = result + "OuvrageProtection : "+OuvrageProtection+"<br>";//73
+    result = result + "Epandages : "+Epandages+"<br>";//74
+    result = result + "SoumisTGAPAir : "+SoumisTGAPAir+"<br>";//75
+    result = result + "CHSCT : "+CHSCT+"<br>";//76
+    result = result + "Milieu : "+Milieu+"<br>";//77
+    result = result + "PollutionAccidentelle : "+PollutionAccidentelle+"<br>";//78
+    result = result + "EMASISO14001 : "+EMASISO14001+"<br>";//80
+    result = result + "DateFinEMASISO14001 : "+DateFinEMASISO14001+"<br>";//81
+    result = result + "Secheresse : "+Secheresse+"<br>";//82
+    result = result + "RemiseEtat : "+RemiseEtat+"<br>";//83
+    result = result + "Carriere : "+Carriere+"<br>";//84
+    result = result + "GarantiesFinancieres : "+GarantiesFinancieres+"<br>";//85
+    result = result + "ResponsableDefaillant : "+ResponsableDefaillant+"<br>";//86
+    result = result + "Elevage : "+Elevage+"<br>";//87
+    result = result + "PreventionLegionellose : "+PreventionLegionellose+"<br>";//88
+    result = result + "NumEDE : "+NumEDE+"<br>";//91
+    result = result + "NumPACAGE : "+NumPACAGE+"<br>";//92
+    result = result + "Vieillissement : "+Vieillissement+"<br>";//95
+    result = result + "SoumisPOI : "+SoumisPOI+"<br>";//107
+    result = result + "DateMAJPOI : "+DateMAJPOI+"<br>";//108
+    result = result + "SoumisPAC : "+SoumisPAC+"<br>";//109
+    result = result + "DatePAC : "+DatePAC+"<br>";//110
+    result = result + "MaitriseUrbanismePIGSUP : "+MaitriseUrbanismePIGSUP+"<br>";//111
+    result = result + "NI140 : "+NI140+"<br>";//93
+  	
+    	return result;
+    }
+    
  
 	
 }
