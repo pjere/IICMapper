@@ -1,8 +1,12 @@
 import java.io.BufferedReader;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Vector;
 
 import ICPE.Site;
+import InputOutput.CSVReader;
 import InputOutput.MyFileWriter;
 
 
@@ -61,6 +65,91 @@ public class Mapper {
 			System.out.println("Problème d'IO");
 		}
 		MyFileWriter.writeToFile(KMLName,"</Document></kml>");
+	}
+	
+	
+	
+	public static void EmissionsKMLMaker( String GEREPAirFileName, String KMLName)	
+	{
+		//in the following section we generate two hashmaps of the emissions parameters and max value and min value regionally for those parameters.
+		HashMap<String,Double> ParametersMaxAir = new HashMap<String,Double>();
+		HashMap<String,Double> ParametersMinAir = new HashMap<String,Double>();
+		BufferedReader rdr ;
+		try
+		{
+			rdr = new BufferedReader(new FileReader(GEREPAirFileName)) ;
+			Vector<String> CurrentLine = new Vector<String>();
+			String str ="";
+			while (rdr.ready()==true) 
+			{
+				str = rdr.readLine();
+				//System.out.println(str);
+				CurrentLine = CSVReader.ParseCSVLine(str);
+				if(ParametersMaxAir.containsKey(CurrentLine.get(9)))
+				{
+					ParametersMaxAir.put(CurrentLine.get(9), Math.max(Double.parseDouble(CurrentLine.get(13)),ParametersMaxAir.get(CurrentLine.get(9))));
+					ParametersMinAir.put(CurrentLine.get(9), Math.min(Double.parseDouble(CurrentLine.get(13)),ParametersMaxAir.get(CurrentLine.get(9))));
+				}
+				else
+				{
+					ParametersMaxAir.put(CurrentLine.get(9), Double.parseDouble(CurrentLine.get(13)));
+					ParametersMinAir.put(CurrentLine.get(9), Double.parseDouble(CurrentLine.get(13)));
+				}		
+			}//while
+		}//try
+		catch (NullPointerException a)
+		{
+			a.printStackTrace();
+		}
+		catch (IOException a) 
+		{
+			System.out.println("Problème d'IO");
+		}
+		
+
+	for(String Parameter : ParametersMaxAir.keySet())
+	{
+		//initializes all the KML files for every parameter.
+		MyFileWriter.writeToFile("/kml/"+MyFileWriter.escape(Parameter)+".kml","<?xml version=\"1.0\" encoding=\"UTF-8\"?><kml xmlns=\"http://earth.google.com/kml/2.0\"> <Document>\n");
+	}	
+		
+	try {
+		rdr = new BufferedReader(new FileReader(KMLName));
+		Vector<String> CurrentLine = new Vector<String>();
+	String KMLInstallationPoint ="";
+	while (rdr.ready()==true) 
+	{
+		KMLInstallationPoint = rdr.readLine();
+		BufferedReader rdrGEREP = new BufferedReader(new FileReader(GEREPAirFileName)) ;
+		while(rdrGEREP.ready()==true)
+		{
+			String rdrGEREPline = rdrGEREP.readLine();
+			CurrentLine = CSVReader.ParseCSVLine(rdrGEREPline);
+				if(KMLInstallationPoint.contains(CurrentLine.get(1)))
+				{
+					double min = ParametersMinAir.get(CurrentLine.get(9));
+					double max = ParametersMaxAir.get(CurrentLine.get(9));
+					double ratio = (Double.parseDouble(CurrentLine.get(13))-min)/(max-min);
+					int filenameint = ((int) ratio*20)*5;
+					String placemarkname =  "/kml/"+filenameint+".png";
+					MyFileWriter.writeToFile("/kml/"+MyFileWriter.escape(CurrentLine.get(9))+".kml", KMLInstallationPoint.replaceFirst("https://home.pjeremie.org/img/(.*)png", placemarkname));
+				}
+			
+		}
+	}
+	} 
+	
+	
+	catch (FileNotFoundException e) 
+	{
+		// TODO Auto-generated catch block
+		e.printStackTrace();
+	}
+	catch (IOException a) 
+	{
+		System.out.println("Problème d'IO");
+	}
+	
 	}
 	
 	
