@@ -93,10 +93,12 @@ public class Site {
     private boolean NI140;//93
 	private HashSet<Installation> TableauClassement;
 	private HashMap<String,Double> GEREPAir;
+	private HashMap<String,Double> GEREPEau;
+	private HashMap<String,String> GEREPEauType;
     
     public Site(){}
     
-    public Site(String CSVLine, String TableauClassementFileAddress, String GEREPAirFileAddress){
+    public Site(String CSVLine, String TableauClassementFileAddress, String GEREPAirFileAddress, String GEREPEauFileAddress){
     	Vector<String> VectorLine = CSVReader.ParseCSVLine(CSVLine);
     	this.S3ICNum=VectorLine.get(0); //0
     	String S3ICNumInitial = S3ICNum.substring(0, S3ICNum.indexOf("."));
@@ -149,6 +151,38 @@ public class Site {
 		{
 			System.out.println("Problème d'IO");
 		}
+    	
+    	
+    	this.GEREPEau = new HashMap<String,Double>();
+    	this.GEREPEauType = new HashMap<String,String>();
+    	
+    	try
+		{
+			rdr = new BufferedReader(new FileReader(GEREPEauFileAddress)) ;
+			Vector<String> CurrentLine = new Vector<String>();
+			String str ="";
+			while (rdr.ready()==true) 
+			{
+				str = rdr.readLine();
+				//System.out.println(str);
+				CurrentLine = CSVReader.ParseCSVLine(str);
+				if(CurrentLine.get(1).equals(this.S3ICNum))
+				{
+					GEREPEau.put(CurrentLine.get(9), Double.parseDouble(CurrentLine.get(11)));
+					GEREPEauType.put(CurrentLine.get(9), CurrentLine.get(10));
+				}
+			}//while
+		}//try
+		catch (NullPointerException a)
+		{
+			a.printStackTrace();
+		}
+		catch (IOException a) 
+		{
+			System.out.println("Problème d'IO");
+		}
+    	
+    	
     	this.NomUsuel=VectorLine.get(1); //1
     	this.RaisonSociale=VectorLine.get(2); //2
     	String Regime = VectorLine.get(4);
@@ -397,17 +431,31 @@ public class Site {
     	result = result+"<table style=\"width:100%\"><tr><th>Rubrique</th><th>"+MyFileWriter.escape("Alinéa")+"</th><th>"+MyFileWriter.escape("Régime")+"</th><th>Date Dern. Mod. Notable</th><th>"+MyFileWriter.escape("État technique")+"</th></tr>";
     	for(Installation i : this.TableauClassement)
     	{
+    		if(i.EtatTechnique.equals("En fonctionnement"))
+    		{
     		result = result+"<tr><td>"+i.RubriqueVigueurCorresp+"</td><td>"+i.RVCAlinea+"</td><td>"+i.RVCRegime.toString()+"</td><td>"+i.DateDerniereModificationNotable+"</td><td>"+MyFileWriter.escape(i.EtatTechnique)+"</td><tr>";
+    		}
     	}
     	result = result+"</table><br><hr><br>";
     	
-    	result = result+"<b>"+MyFileWriter.escape("Déclaration")+" GEREP</b><br><br>";
+    	result = result+"<b>"+MyFileWriter.escape("Déclaration")+" GEREP Air</b><br><br>";
     	result = result+"<table style=\"width:100%\"><tr><th>"+MyFileWriter.escape("Paramètre")+"</th><th>Rejets AN-1 (kg)</th></tr>";
     	for(String i : this.GEREPAir.keySet())
     	{
     		result = result+"<tr><td>"+MyFileWriter.escape(i)+"</td><td>"+this.GEREPAir.get(i)+"</td><tr>";
     	}
     	result = result+"</table><br><hr><br>";
+    	
+    	result = result+"<b>"+MyFileWriter.escape("Déclaration")+" GEREP Eau</b><br><br>";
+    	result = result+"<table style=\"width:100%\"><tr><th>"+MyFileWriter.escape("Paramètre")+"</th><th>Rejets AN-1 (kg)</th><th>Type Rejet</th></tr>";
+    	for(String i : this.GEREPEau.keySet())
+    	{
+    		result = result+"<tr><td>"+MyFileWriter.escape(i)+"</td><td>"+this.GEREPEau.get(i)+"</td><td>"+this.GEREPEauType.get(i)+"</td><tr>";
+    	}
+    	result = result+"</table><br><hr><br>";
+    	
+    	
+    	
     	result = result+"<b> Autres Critères</b><br><br>";		
 
 	result = result + "SoumisRemiseEtat : "+SoumisRemiseEtat+"<br>";//38
