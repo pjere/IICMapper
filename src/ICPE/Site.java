@@ -168,7 +168,8 @@ public class Site {
 				CurrentLine = CSVReader.ParseCSVLine(str);
 				if(CurrentLine.get(1).equals(this.S3ICNum))
 				{
-					GEREPEau.put(CurrentLine.get(9), Double.parseDouble(CurrentLine.get(11)));
+					try{
+					GEREPEau.put(CurrentLine.get(9), Double.parseDouble(CurrentLine.get(11)));} catch(NumberFormatException a){GEREPEau.put(CurrentLine.get(9), 0.0); }
 					GEREPEauType.put(CurrentLine.get(9), CurrentLine.get(10));
 				}
 			}//while
